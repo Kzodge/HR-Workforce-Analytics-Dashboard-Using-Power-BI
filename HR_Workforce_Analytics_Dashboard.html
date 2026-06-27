@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HR Workforce Analytics Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  /* === COLOR SYSTEM (changed from purple #a100ff to teal/emerald palette) === */
+  :root {
+    --bg-primary:     #0b1a2c;
+    --bg-sidebar:     #0e2038;
+    --bg-card:        #112240;
+    --bg-card-hover:  #163060;
+    --accent-1:       #00c9a7;   /* teal-green  – primary accent */
+    --accent-2:       #3b82f6;   /* electric blue – secondary */
+    --accent-3:       #f59e0b;   /* amber – highlight */
+    --accent-4:       #ef4444;   /* red – attrition / risk */
+    --accent-5:       #a78bfa;   /* lavender – tertiary */
+    --text-primary:   #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted:     #64748b;
+    --border:         #1e3a5f;
+    --shadow:         0 4px 24px rgba(0,0,0,0.4);
+    --radius:         12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    display: flex;
+    min-height: 100vh;
+    font-size: 14px;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 200px;
+    min-height: 100vh;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0;
+    z-index: 100;
+  }
+  .sidebar-logo {
+    padding: 20px 16px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-logo .logo-text {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent-1);
+    letter-spacing: 0.5px;
+    line-height: 1.3;
+  }
+  .sidebar-logo .logo-sub {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .nav-list { padding: 12px 0; flex: 1; }
+  .nav-item {
+    padding: 10px 16px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .nav-item:hover { background: rgba(0,201,167,0.07); color: var(--text-primary); }
+  .nav-item.active {
+    border-left-color: var(--accent-1);
+    background: rgba(0,201,167,0.12);
+    color: var(--accent-1);
+  }
+  .nav-icon { font-size: 14px; width: 16px; text-align: center; }
+
+  /* ── Main ── */
+  .main {
+    margin-left: 200px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Top Bar ── */
+  .topbar {
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .page-title { font-size: 16px; font-weight: 600; color: var(--text-primary); }
+  .topbar-right { display: flex; gap: 12px; align-items: center; }
+  .filter-badge {
+    background: rgba(0,201,167,0.15);
+    border: 1px solid rgba(0,201,167,0.3);
+    color: var(--accent-1);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .refresh-btn {
+    background: var(--accent-1);
+    color: #0b1a2c;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .refresh-btn:hover { opacity: 0.85; }
+
+  /* ── Content Area ── */
+  .content { padding: 20px 24px; display: none; }
+  .content.active { display: block; }
+
+  /* ── KPI Cards ── */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+  .kpi-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, border-color 0.2s;
+    cursor: default;
+  }
+  .kpi-card:hover { transform: translateY(-2px); border-color: var(--accent-1); }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+  }
+  .kpi-card.teal::before { background: var(--accent-1); }
+  .kpi-card.blue::before { background: var(--accent-2); }
+  .kpi-card.amber::before { background: var(--accent-3); }
+  .kpi-card.red::before  { background: var(--accent-4); }
+  .kpi-card.purple::before { background: var(--accent-5); }
+  .kpi-label { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; }
+  .kpi-value { font-size: 26px; font-weight: 700; margin: 6px 0 4px; color: var(--text-primary); }
+  .kpi-value.teal  { color: var(--accent-1); }
+  .kpi-value.blue  { color: var(--accent-2); }
+  .kpi-value.amber { color: var(--accent-3); }
+  .kpi-value.red   { color: var(--accent-4); }
+  .kpi-delta { font-size: 11px; color: var(--accent-1); font-weight: 600; }
+  .kpi-delta.neg { color: var(--accent-4); }
+  .kpi-icon {
+    position: absolute; right: 14px; top: 14px;
+    font-size: 22px; opacity: 0.25;
+  }
+
+  /* ── Chart Grid ── */
+  .chart-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .chart-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .chart-grid-1 { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 16px; }
+  .chart-grid-32 { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; margin-bottom: 16px; }
+  .chart-grid-23 { display: grid; grid-template-columns: 2fr 3fr; gap: 16px; margin-bottom: 16px; }
+
+  /* ── Chart Cards ── */
+  .chart-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+  }
+  .chart-card-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .chart-card-title .tag {
+    font-size: 10px;
+    background: rgba(0,201,167,0.15);
+    color: var(--accent-1);
+    padding: 2px 8px;
+    border-radius: 12px;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 600;
+  }
+  .chart-card-title .tag.blue { background: rgba(59,130,246,0.15); color: var(--accent-2); }
+  .chart-card-title .tag.amber { background: rgba(245,158,11,0.15); color: var(--accent-3); }
+  .chart-card-title .tag.red { background: rgba(239,68,68,0.15); color: var(--accent-4); }
+  .chart-wrapper { position: relative; height: 220px; }
+  .chart-wrapper.tall { height: 280px; }
+  .chart-wrapper.short { height: 160px; }
+
+  /* ── Map placeholder ── */
+  .map-placeholder {
+    height: 220px;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+    border: 1px dashed var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .map-placeholder .map-label { color: var(--text-muted); font-size: 12px; }
+  .map-dots { position: absolute; inset: 0; }
+
+  /* ── Heatmap Table ── */
+  .heatmap-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .heatmap-table th {
+    background: var(--bg-primary);
+    color: var(--text-muted);
+    padding: 6px 8px;
+    text-align: center;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .heatmap-table td {
+    padding: 5px 8px;
+    text-align: center;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .heatmap-table .row-label {
+    text-align: left;
+    color: var(--text-secondary);
+    font-weight: 500;
+    background: transparent;
+    border: none;
+  }
+
+  /* ── Scatter / bubble ── */
+  .scatter-info {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 8px;
+    text-align: center;
+  }
+
+  /* ── Section header ── */
+  .section-header {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-header::before {
+    content: '';
+    width: 4px; height: 14px;
+    background: var(--accent-1);
+    border-radius: 2px;
+  }
+
+  /* ── Action Plan ── */
+  .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+  .action-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .action-card-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+  }
+  .action-icon { font-size: 22px; }
+  .action-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .action-subtitle { font-size: 11px; color: var(--text-muted); }
+  .action-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .action-item:last-child { border-bottom: none; }
+  .priority {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+  .priority.high { background: rgba(239,68,68,0.2); color: var(--accent-4); }
+  .priority.med  { background: rgba(245,158,11,0.2); color: var(--accent-3); }
+  .priority.low  { background: rgba(0,201,167,0.2); color: var(--accent-1); }
+
+  .kpi-row-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 20px; }
+  .kpi-row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+
+  .progress-bar-wrap { margin-top: 8px; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
+  .progress-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+
+  .legend-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); }
+  .legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+  canvas { max-width: 100%; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-text">HR Analytics</div>
+    <div class="logo-sub">Workforce Intelligence</div>
+  </div>
+  <nav class="nav-list">
+    <div class="nav-item active" onclick="showPage('workforce')">
+      <span class="nav-icon">👥</span> Workforce Overview
+    </div>
+    <div class="nav-item" onclick="showPage('attrition')">
+      <span class="nav-icon">📉</span> Attrition & Retention
+    </div>
+    <div class="nav-item" onclick="showPage('engagement')">
+      <span class="nav-icon">⭐</span> Engagement & Satisfaction
+    </div>
+    <div class="nav-item" onclick="showPage('training')">
+      <span class="nav-icon">🎓</span> Training & Development
+    </div>
+    <div class="nav-item" onclick="showPage('action')">
+      <span class="nav-icon">🎯</span> HR Strategic Plan
+    </div>
+  </nav>
+</aside>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Top Bar (updates per page) -->
+  <div class="topbar">
+    <div class="page-title" id="page-title">Workforce Overview</div>
+    <div class="topbar-right">
+      <span class="filter-badge">FY 2025</span>
+      <span class="filter-badge">All Departments</span>
+      <button class="refresh-btn">↻ Refresh</button>
+    </div>
+  </div>
+
+  <!-- ======== PAGE 1: Workforce Overview ======== -->
+  <div class="content active" id="page-workforce">
+    <div class="kpi-row">
+      <div class="kpi-card teal">
+        <div class="kpi-icon">👥</div>
+        <div class="kpi-label">Total Employees</div>
+        <div class="kpi-value teal">1,470</div>
+        <div class="kpi-delta">↑ 4.2% vs last year</div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-icon">✅</div>
+        <div class="kpi-label">Active Employees</div>
+        <div class="kpi-value blue">1,233</div>
+        <div class="kpi-delta">↑ 2.8% vs last year</div>
+      </div>
+      <div class="kpi-card amber">
+        <div class="kpi-icon">💰</div>
+        <div class="kpi-label">Average Salary</div>
+        <div class="kpi-value amber">$68,400</div>
+        <div class="kpi-delta">↑ 5.1% vs last year</div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-icon">📊</div>
+        <div class="kpi-label">% of Workforce Active</div>
+        <div class="kpi-value" style="color:var(--accent-5)">83.9%</div>
+        <div class="kpi-delta">↓ 0.5% vs last year</div>
+      </div>
+    </div>
+
+    <div class="chart-grid-3">
+      <div class="chart-card">
+        <div class="chart-card-title">Total Headcount by Gender <span class="tag">Donut</span></div>
+        <div class="chart-wrapper short"><canvas id="genderChart"></canvas></div>
+        <div class="legend-row" id="genderLegend"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Headcount by Department <span class="tag blue">Bar</span></div>
+        <div class="chart-wrapper short"><canvas id="deptChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Total Headcount by Race <span class="tag">Donut</span></div>
+        <div class="chart-wrapper short"><canvas id="raceChart"></canvas></div>
+        <div class="legend-row" id="raceLegend"></div>
+      </div>
+    </div>
+
+    <div class="chart-grid-2">
+      <div class="chart-card">
+        <div class="chart-card-title">Total Headcount by State
+          <span class="tag amber">Map View</span>
+        </div>
+        <div class="map-placeholder">
+          <div style="font-size:36px">🗺️</div>
+          <div class="map-label">Geographic Distribution — US States</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+            CA: 298 &nbsp;|&nbsp; TX: 187 &nbsp;|&nbsp; NY: 165 &nbsp;|&nbsp; FL: 142 &nbsp;|&nbsp; WA: 118 &nbsp;|&nbsp; Other: 560
+          </div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Department Headcount by Employment Type <span class="tag blue">Stacked Bar</span></div>
+        <div class="chart-wrapper"><canvas id="empTypeChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== PAGE 2: Attrition & Retention ======== -->
+  <div class="content" id="page-attrition">
+    <div class="kpi-row">
+      <div class="kpi-card red">
+        <div class="kpi-icon">📉</div>
+        <div class="kpi-label">Overall Attrition Rate</div>
+        <div class="kpi-value red">16.1%</div>
+        <div class="kpi-delta neg">↑ 2.3% vs last year</div>
+      </div>
+      <div class="kpi-card amber">
+        <div class="kpi-icon">🚪</div>
+        <div class="kpi-label">Voluntary Attrition</div>
+        <div class="kpi-value amber">11.4%</div>
+        <div class="kpi-delta neg">↑ 1.8% vs last year</div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-icon">⚡</div>
+        <div class="kpi-label">Involuntary Attrition</div>
+        <div class="kpi-value blue">4.7%</div>
+        <div class="kpi-delta">↓ 0.5% vs last year</div>
+      </div>
+      <div class="kpi-card teal">
+        <div class="kpi-icon">🔄</div>
+        <div class="kpi-label">Avg. Tenure (Years)</div>
+        <div class="kpi-value teal">4.2</div>
+        <div class="kpi-delta">↑ 0.3 vs last year</div>
+      </div>
+    </div>
+
+    <div class="chart-grid-2">
+      <div class="chart-card">
+        <div class="chart-card-title">Department-wise Attrition Analysis <span class="tag red">Column</span></div>
+        <div class="chart-wrapper"><canvas id="deptAttrChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Top Reasons for Employee Attrition <span class="tag amber">Donut</span></div>
+        <div class="chart-wrapper"><canvas id="attrReasonsChart"></canvas></div>
+        <div class="legend-row" id="attrReasonsLegend"></div>
+      </div>
+    </div>
+
+    <div class="chart-grid-2">
+      <div class="chart-card">
+        <div class="chart-card-title">Attrition by Job Level <span class="tag blue">Column</span></div>
+        <div class="chart-wrapper"><canvas id="jobLevelAttrChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Monthly Attrition Trend <span class="tag">Line</span></div>
+        <div class="chart-wrapper"><canvas id="monthlyAttrChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== PAGE 3: Engagement & Satisfaction ======== -->
+  <div class="content" id="page-engagement">
+    <div class="kpi-row">
+      <div class="kpi-card teal">
+        <div class="kpi-icon">💚</div>
+        <div class="kpi-label">Avg. Engagement Score</div>
+        <div class="kpi-value teal">3.8</div>
+        <div class="kpi-delta">↑ 0.2 vs last year</div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-icon">⚖️</div>
+        <div class="kpi-label">Avg. Work-Life Balance</div>
+        <div class="kpi-value blue">3.5</div>
+        <div class="kpi-delta">↑ 0.1 vs last year</div>
+      </div>
+      <div class="kpi-card amber">
+        <div class="kpi-icon">📈</div>
+        <div class="kpi-label">Career Growth Score</div>
+        <div class="kpi-value amber">3.6</div>
+        <div class="kpi-delta">↑ 0.3 vs last year</div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-icon">🌟</div>
+        <div class="kpi-label">Avg. eNPS Score</div>
+        <div class="kpi-value" style="color:var(--accent-5)">+24</div>
+        <div class="kpi-delta">↑ 6 pts vs last year</div>
+      </div>
+    </div>
+
+    <div class="chart-grid-2">
+      <div class="chart-card">
+        <div class="chart-card-title">Employee Engagement by Department <span class="tag">Column</span></div>
+        <div class="chart-wrapper"><canvas id="engageDeptChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Department Satisfaction Heatmap <span class="tag blue">Heatmap</span></div>
+        <div style="overflow-x:auto;margin-top:4px">
+          <table class="heatmap-table" id="satisfactionHeatmap"></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-grid-3">
+      <div class="chart-card">
+        <div class="chart-card-title">Job Satisfaction by Job Level <span class="tag amber">Column</span></div>
+        <div class="chart-wrapper short"><canvas id="jobSatChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">eNPS Distribution <span class="tag">Donut</span></div>
+        <div class="chart-wrapper short"><canvas id="enpsChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Manager Satisfaction vs Engagement <span class="tag blue">Scatter</span></div>
+        <div class="chart-wrapper short"><canvas id="scatterChart"></canvas></div>
+        <div class="scatter-info">Bubble size = team size · X = Manager Satisfaction · Y = Engagement</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== PAGE 4: Training & Development ======== -->
+  <div class="content" id="page-training">
+    <div class="kpi-row">
+      <div class="kpi-card teal">
+        <div class="kpi-icon">🎓</div>
+        <div class="kpi-label">Total Training Programs</div>
+        <div class="kpi-value teal">48</div>
+        <div class="kpi-delta">↑ 8 vs last year</div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-icon">✔️</div>
+        <div class="kpi-label">Completion Rate</div>
+        <div class="kpi-value blue">78.3%</div>
+        <div class="kpi-delta">↑ 5.2% vs last year</div>
+      </div>
+      <div class="kpi-card amber">
+        <div class="kpi-icon">💸</div>
+        <div class="kpi-label">Training Cost (Total)</div>
+        <div class="kpi-value amber">$1.2M</div>
+        <div class="kpi-delta">↑ 12% vs last year</div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-icon">📐</div>
+        <div class="kpi-label">Avg. Skill Improvement</div>
+        <div class="kpi-value" style="color:var(--accent-5)">+18%</div>
+        <div class="kpi-delta">↑ 3% vs last year</div>
+      </div>
+    </div>
+
+    <div class="chart-grid-2">
+      <div class="chart-card">
+        <div class="chart-card-title">Skill Improvement by Department <span class="tag">Bar</span></div>
+        <div class="chart-wrapper"><canvas id="skillChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Training Completion Status <span class="tag amber">Donut</span></div>
+        <div class="chart-wrapper"><canvas id="completionChart"></canvas></div>
+        <div class="legend-row" id="completionLegend"></div>
+      </div>
+    </div>
+
+    <div class="chart-grid-2">
+      <div class="chart-card">
+        <div class="chart-card-title">Training Cost by Department <span class="tag blue">Column</span></div>
+        <div class="chart-wrapper"><canvas id="trainCostChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Trainer Effectiveness <span class="tag">Column</span></div>
+        <div class="chart-wrapper"><canvas id="trainerChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== PAGE 5: HR Strategic Action Plan ======== -->
+  <div class="content" id="page-action">
+    <div class="kpi-row-3">
+      <div class="kpi-card red">
+        <div class="kpi-icon">🔴</div>
+        <div class="kpi-label">Critical Risks Identified</div>
+        <div class="kpi-value red">3</div>
+        <div class="kpi-delta neg">Require immediate attention</div>
+      </div>
+      <div class="kpi-card amber">
+        <div class="kpi-icon">🟡</div>
+        <div class="kpi-label">Actions In Progress</div>
+        <div class="kpi-value amber">7</div>
+        <div class="kpi-delta">On track for Q3 completion</div>
+      </div>
+      <div class="kpi-card teal">
+        <div class="kpi-icon">🟢</div>
+        <div class="kpi-label">Completed Initiatives</div>
+        <div class="kpi-value teal">12</div>
+        <div class="kpi-delta">↑ 4 completed this quarter</div>
+      </div>
+    </div>
+
+    <div class="action-grid">
+      <div class="action-card">
+        <div class="action-card-header">
+          <span class="action-icon">📉</span>
+          <div>
+            <div class="action-title">Attrition Reduction Plan</div>
+            <div class="action-subtitle">Target: Reduce attrition to 12% by Q4 2025</div>
+          </div>
+        </div>
+        <div class="action-item"><span class="priority high">HIGH</span> Implement stay interviews across Sales & IT departments</div>
+        <div class="action-item"><span class="priority high">HIGH</span> Review compensation benchmarks vs. industry peers</div>
+        <div class="action-item"><span class="priority med">MED</span> Launch flexible work policy for hybrid roles</div>
+        <div class="action-item"><span class="priority low">LOW</span> Establish monthly manager-employee 1:1 tracking</div>
+      </div>
+
+      <div class="action-card">
+        <div class="action-card-header">
+          <span class="action-icon">💚</span>
+          <div>
+            <div class="action-title">Engagement Improvement</div>
+            <div class="action-subtitle">Target: eNPS to +35 by end of 2025</div>
+          </div>
+        </div>
+        <div class="action-item"><span class="priority high">HIGH</span> Deploy quarterly pulse surveys across all departments</div>
+        <div class="action-item"><span class="priority med">MED</span> Create career pathing workshops for mid-level employees</div>
+        <div class="action-item"><span class="priority med">MED</span> Expand manager effectiveness coaching program</div>
+        <div class="action-item"><span class="priority low">LOW</span> Introduce peer recognition platform</div>
+      </div>
+
+      <div class="action-card">
+        <div class="action-card-header">
+          <span class="action-icon">🎓</span>
+          <div>
+            <div class="action-title">Learning & Development Scale-up</div>
+            <div class="action-subtitle">Target: 90% completion rate by Q3 2025</div>
+          </div>
+        </div>
+        <div class="action-item"><span class="priority high">HIGH</span> Mandate digital skills training for all staff</div>
+        <div class="action-item"><span class="priority med">MED</span> Partner with external LMS for on-demand learning</div>
+        <div class="action-item"><span class="priority med">MED</span> Budget $300K for leadership development cohort</div>
+        <div class="action-item"><span class="priority low">LOW</span> Launch internal mentorship matching program</div>
+      </div>
+
+      <div class="action-card">
+        <div class="action-card-header">
+          <span class="action-icon">⚖️</span>
+          <div>
+            <div class="action-title">DEI & Workforce Equity</div>
+            <div class="action-subtitle">Target: Increase underrepresented groups by 15%</div>
+          </div>
+        </div>
+        <div class="action-item"><span class="priority high">HIGH</span> Audit hiring funnel for unconscious bias touchpoints</div>
+        <div class="action-item"><span class="priority med">MED</span> Expand diverse talent pipeline partnerships</div>
+        <div class="action-item"><span class="priority med">MED</span> Set gender pay parity milestone for FY2026</div>
+        <div class="action-item"><span class="priority low">LOW</span> Launch ERG (Employee Resource Group) funding</div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-title">Initiative Progress Tracker <span class="tag">Q2 2025</span></div>
+      <div id="progressTracker"></div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+// === Color palette for charts ===
+const C = {
+  teal:   '#00c9a7',
+  blue:   '#3b82f6',
+  amber:  '#f59e0b',
+  red:    '#ef4444',
+  purple: '#a78bfa',
+  pink:   '#ec4899',
+  indigo: '#6366f1',
+  lime:   '#84cc16',
+  cyan:   '#06b6d4',
+  orange: '#f97316',
+  grid:   'rgba(30,58,95,0.5)',
+  text:   '#94a3b8',
+};
+
+const chartDefaults = {
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { ticks: { color: C.text, font: { size: 10 } }, grid: { color: C.grid } },
+    y: { ticks: { color: C.text, font: { size: 10 } }, grid: { color: C.grid } },
+  }
+};
+
+function mkBar(id, labels, datasets, opts = {}) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  return new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: { ...chartDefaults, indexAxis: opts.horizontal ? 'y' : 'x', ...opts.extra,
+      plugins: { legend: { display: opts.legend ?? false, labels: { color: C.text, font: { size: 10 }, boxWidth: 10 } } },
+      scales: { x: chartDefaults.scales.x, y: { ...chartDefaults.scales.y, beginAtZero: true } }
+    }
+  });
+}
+
+function mkLine(id, labels, datasets) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  return new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: { ...chartDefaults, plugins: { legend: { display: false } } }
+  });
+}
+
+function mkDonut(id, labels, data, colors, legendId) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: '#112240', borderWidth: 2, hoverOffset: 8 }] },
+    options: {
+      cutout: '60%',
+      plugins: { legend: { display: false } },
+      animation: { animateRotate: true }
+    }
+  });
+  if (legendId) {
+    const el = document.getElementById(legendId);
+    if (el) {
+      el.innerHTML = labels.map((l, i) =>
+        `<div class="legend-item"><div class="legend-dot" style="background:${colors[i]}"></div>${l}</div>`
+      ).join('');
+    }
+  }
+}
+
+function mkScatter(id, points) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'bubble',
+    data: { datasets: points },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: C.text, font: { size: 10 } }, grid: { color: C.grid }, title: { display: false } },
+        y: { ticks: { color: C.text, font: { size: 10 } }, grid: { color: C.grid } }
+      }
+    }
+  });
+}
+
+// ── Page 1: Workforce Overview ──
+mkDonut('genderChart',
+  ['Female', 'Male', 'Non-Binary'],
+  [588, 847, 35],
+  [C.teal, C.blue, C.purple],
+  'genderLegend'
+);
+mkDonut('raceChart',
+  ['White', 'Black/AA', 'Hispanic', 'Asian', 'Other'],
+  [630, 280, 210, 240, 110],
+  [C.teal, C.blue, C.amber, C.purple, C.red],
+  'raceLegend'
+);
+mkBar('deptChart',
+  ['Sales', 'IT', 'HR', 'Finance', 'Ops', 'Marketing', 'R&D'],
+  [{ data: [320, 265, 98, 145, 210, 132, 300], backgroundColor: C.teal + 'cc', borderRadius: 4, borderSkipped: false }],
+  { horizontal: true }
+);
+mkBar('empTypeChart',
+  ['Sales', 'IT', 'HR', 'Finance', 'Ops', 'Marketing'],
+  [
+    { label: 'Full-Time', data: [280, 220, 80, 120, 185, 110], backgroundColor: C.teal + 'cc', borderRadius: 3 },
+    { label: 'Part-Time', data: [25, 30, 10, 15, 18, 16], backgroundColor: C.blue + 'cc', borderRadius: 3 },
+    { label: 'Contract', data: [15, 15, 8, 10, 7, 6], backgroundColor: C.amber + 'cc', borderRadius: 3 },
+  ],
+  { legend: true, extra: { scales: { x: { stacked: true, ...chartDefaults.scales.x }, y: { stacked: true, ...chartDefaults.scales.y } } } }
+);
+
+// ── Page 2: Attrition ──
+mkBar('deptAttrChart',
+  ['Sales', 'IT', 'HR', 'Finance', 'Ops', 'Marketing', 'R&D'],
+  [{ data: [22, 18, 12, 9, 15, 14, 8], backgroundColor: [C.red, C.red, C.amber, C.teal, C.amber, C.amber, C.teal].map(c => c + 'cc'), borderRadius: 4 }]
+);
+mkDonut('attrReasonsChart',
+  ['Better Opportunity', 'Work-Life Balance', 'Compensation', 'Management', 'Relocation', 'Other'],
+  [30, 22, 20, 14, 8, 6],
+  [C.red, C.amber, C.blue, C.purple, C.teal, C.text],
+  'attrReasonsLegend'
+);
+mkBar('jobLevelAttrChart',
+  ['Entry', 'Mid', 'Senior', 'Lead', 'Manager', 'Director'],
+  [{ data: [24, 19, 14, 10, 7, 4], backgroundColor: C.amber + 'cc', borderRadius: 4 }]
+);
+mkLine('monthlyAttrChart',
+  ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+  [{
+    data: [12, 15, 11, 18, 20, 16, 14, 17, 22, 19, 13, 10],
+    borderColor: C.red,
+    backgroundColor: C.red + '20',
+    fill: true,
+    tension: 0.4,
+    pointBackgroundColor: C.red,
+    pointRadius: 3
+  }]
+);
+
+// ── Page 3: Engagement ──
+mkBar('engageDeptChart',
+  ['Sales', 'IT', 'HR', 'Finance', 'Ops', 'Marketing', 'R&D'],
+  [{ data: [3.6, 4.1, 3.9, 3.7, 3.4, 3.8, 4.2], backgroundColor: C.teal + 'cc', borderRadius: 4 }],
+  { extra: { scales: { x: chartDefaults.scales.x, y: { ...chartDefaults.scales.y, min: 0, max: 5 } } } }
+);
+mkBar('jobSatChart',
+  ['Entry', 'Mid', 'Senior', 'Lead', 'Manager', 'Director'],
+  [{ data: [3.2, 3.5, 3.8, 4.0, 4.2, 4.5], backgroundColor: C.amber + 'cc', borderRadius: 4 }]
+);
+mkDonut('enpsChart',
+  ['Promoters', 'Passives', 'Detractors'],
+  [48, 30, 22],
+  [C.teal, C.amber, C.red],
+  null
+);
+mkScatter('scatterChart', [
+  { label: 'Sales', data: [{ x: 3.2, y: 3.6, r: 14 }], backgroundColor: C.red + 'aa' },
+  { label: 'IT', data: [{ x: 4.1, y: 4.1, r: 12 }], backgroundColor: C.blue + 'aa' },
+  { label: 'HR', data: [{ x: 3.8, y: 3.9, r: 8 }], backgroundColor: C.teal + 'aa' },
+  { label: 'Finance', data: [{ x: 3.5, y: 3.7, r: 10 }], backgroundColor: C.amber + 'aa' },
+  { label: 'Ops', data: [{ x: 3.0, y: 3.4, r: 11 }], backgroundColor: C.purple + 'aa' },
+  { label: 'R&D', data: [{ x: 4.3, y: 4.2, r: 13 }], backgroundColor: C.lime + 'aa' },
+]);
+
+// Satisfaction Heatmap
+const depts = ['Sales', 'IT', 'HR', 'Finance', 'Ops', 'R&D'];
+const metrics = ['Job Sat.', 'Mgr Sat.', 'Career', 'WLB', 'Collab'];
+const heatData = [
+  [3.2, 3.4, 3.0, 3.1, 3.8],
+  [4.1, 4.0, 4.2, 3.9, 4.3],
+  [3.9, 3.7, 3.8, 4.0, 3.9],
+  [3.7, 3.6, 3.5, 3.8, 3.7],
+  [3.4, 3.2, 3.3, 3.5, 3.6],
+  [4.2, 4.1, 4.3, 4.0, 4.4],
+];
+function heatColor(v) {
+  const ratio = (v - 3.0) / 1.5;
+  const r = Math.round(239 * (1 - ratio) + 0 * ratio);
+  const g = Math.round(68 * (1 - ratio) + 201 * ratio);
+  const b = Math.round(68 * (1 - ratio) + 167 * ratio);
+  return `rgba(${r},${g},${b},0.35)`;
+}
+const tbl = document.getElementById('satisfactionHeatmap');
+if (tbl) {
+  let html = '<thead><tr><th class="row-label"></th>' + metrics.map(m => `<th>${m}</th>`).join('') + '</tr></thead><tbody>';
+  depts.forEach((d, i) => {
+    html += `<tr><td class="row-label">${d}</td>` + heatData[i].map(v => `<td style="background:${heatColor(v)}">${v.toFixed(1)}</td>`).join('') + '</tr>';
+  });
+  html += '</tbody>';
+  tbl.innerHTML = html;
+}
+
+// ── Page 4: Training ──
+mkBar('skillChart',
+  ['IT', 'R&D', 'HR', 'Sales', 'Finance', 'Marketing', 'Ops'],
+  [{ data: [24, 22, 18, 17, 15, 14, 12], backgroundColor: C.teal + 'cc', borderRadius: 4 }],
+  { horizontal: true }
+);
+mkDonut('completionChart',
+  ['Completed', 'In Progress', 'Not Started'],
+  [78, 14, 8],
+  [C.teal, C.amber, C.red],
+  'completionLegend'
+);
+mkBar('trainCostChart',
+  ['IT', 'Sales', 'R&D', 'Ops', 'Finance', 'HR', 'Marketing'],
+  [{ data: [280, 240, 210, 175, 140, 90, 65], backgroundColor: C.blue + 'cc', borderRadius: 4 }]
+);
+mkBar('trainerChart',
+  ['Trainer A', 'Trainer B', 'Trainer C', 'Trainer D', 'Trainer E'],
+  [{ data: [4.7, 4.4, 4.2, 3.9, 3.6], backgroundColor: C.purple + 'cc', borderRadius: 4 }],
+  { extra: { scales: { x: chartDefaults.scales.x, y: { ...chartDefaults.scales.y, min: 0, max: 5 } } } }
+);
+
+// ── Page 5: Progress Tracker ──
+const initiatives = [
+  { name: 'Stay Interview Program', progress: 75, color: C.teal },
+  { name: 'Compensation Benchmarking', progress: 55, color: C.amber },
+  { name: 'Quarterly Pulse Surveys', progress: 90, color: C.teal },
+  { name: 'Digital Skills Training Mandate', progress: 40, color: C.blue },
+  { name: 'DEI Hiring Audit', progress: 60, color: C.purple },
+  { name: 'Leadership Development Cohort', progress: 30, color: C.amber },
+  { name: 'Mentorship Matching Platform', progress: 20, color: C.blue },
+];
+const tracker = document.getElementById('progressTracker');
+if (tracker) {
+  tracker.innerHTML = initiatives.map(item => `
+    <div class="progress-bar-wrap">
+      <div class="progress-label"><span>${item.name}</span><span style="color:${item.color};font-weight:700">${item.progress}%</span></div>
+      <div class="progress-track"><div class="progress-fill" style="width:${item.progress}%;background:${item.color}"></div></div>
+    </div>
+  `).join('');
+}
+
+// ── Navigation ──
+const titles = {
+  workforce: 'Workforce Overview',
+  attrition: 'Attrition & Retention',
+  engagement: 'Engagement & Satisfaction',
+  training: 'Training & Development',
+  action: 'HR Strategic Action Plan'
+};
+
+function showPage(id) {
+  document.querySelectorAll('.content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  const page = document.getElementById('page-' + id);
+  if (page) page.classList.add('active');
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(item => {
+    if (item.getAttribute('onclick')?.includes("'" + id + "'")) item.classList.add('active');
+  });
+  document.getElementById('page-title').textContent = titles[id] || id;
+}
+</script>
+</body>
+</html>
